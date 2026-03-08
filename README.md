@@ -2,7 +2,7 @@
 
 A self-hosted Progressive Web App that receives real push notifications on iOS (and Android/desktop). You send notifications from a CLI tool or a web admin panel, and they arrive as native OS-level notifications on subscribed devices. Did not include ANY security. PoC only. 
 
-[IMG_7995.jpeg]
+![CloudPlush screenshot](IMG_7995.jpeg)
 
 Was Live at: `https://notifications.cloudplush.com` - no longer active. Published the code and README here for posterity and learning.
 
