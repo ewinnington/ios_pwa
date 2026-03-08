@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CloudPlush">
+  <meta name="theme-color" content="#6C5CE7">
+  <title>CloudPlush</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <script src="/static/htmx.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    }
+    header {
+      text-align: center;
+      padding: 32px 0 16px;
+    }
+    header h1 {
+      font-size: 1.6rem;
+      color: #a29bfe;
+      letter-spacing: 0.5px;
+    }
+    #status {
+      margin-top: 6px;
+      font-size: 0.85rem;
+      color: #636e72;
+    }
+    #status.ok { color: #00cec9; }
+    #status.warn { color: #fdcb6e; }
+    #status.error { color: #ff7675; }
+
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0 24px;
+    }
+    #device-name {
+      background: #1a1a2e;
+      border: 1px solid #2d2d44;
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      font-family: inherit;
+      text-align: center;
+      width: 220px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #device-name:focus { border-color: #6C5CE7; }
+    #subscribe-btn {
+      background: #6C5CE7;
+      color: #fff;
+      border: none;
+      padding: 14px 32px;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #subscribe-btn:active { transform: scale(0.97); }
+    #subscribe-btn.subscribed {
+      background: transparent;
+      border: 2px solid #636e72;
+      color: #636e72;
+    }
+    #subscribe-btn:disabled { opacity: 0.4; }
+
+    .section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #636e72;
+      margin-bottom: 12px;
+      padding-left: 4px;
+    }
+
+    .notif-item {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .notif-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #dfe6e9;
+    }
+    .notif-body {
+      font-size: 0.85rem;
+      color: #b2bec3;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .notif-time {
+      display: block;
+      font-size: 0.72rem;
+      color: #636e72;
+      margin-top: 6px;
+    }
+    .empty {
+      text-align: center;
+      color: #636e72;
+      padding: 32px 0;
+      font-size: 0.9rem;
+    }
+    .empty a { color: #6C5CE7; }
+
+    .hint {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #636e72;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CloudPlush</h1>
+    <p id="status">Checking...</p>
+  </header>
+
+  <div class="controls">
+    <input id="device-name" type="text" placeholder="Device name">
+    <button id="subscribe-btn" onclick="toggleSubscription()" disabled>Loading...</button>
+    <p id="hint" class="hint" style="display:none"></p>
+  </div>
+
+  <div class="section-title">Notifications</div>
+  <div id="notification-list"
+       hx-get="/api/notifications"
+       hx-trigger="load, every 10s, refresh"
+       hx-swap="innerHTML">
+    Loading...
+  </div>
+
+  <script>
+    let swReg = null;
+    let subscribed = false;
+
+    // ── helpers ──
+    function setStatus(text, type) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+      el.className = type || "";
+    }
+
+    function setHint(text) {
+      const el = document.getElementById("hint");
+      el.textContent = text;
+      el.style.display = text ? "block" : "none";
+    }
+
+    function urlBase64ToUint8Array(b64) {
+      const padding = "=".repeat((4 - (b64.length % 4)) % 4);
+      const raw = atob((b64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+
+    function detectDevice() {
+      const ua = navigator.userAgent;
+      if (/iPhone/.test(ua)) return "iPhone";
+      if (/iPad/.test(ua)) return "iPad";
+      if (/Android/.test(ua)) return "Android";
+      if (/Mac/.test(ua)) return "Mac";
+      if (/Windows/.test(ua)) return "Windows PC";
+      return "Device";
+    }
+
+    function timeAgo(iso) {
+      const s = Math.floor((Date.now() - new Date(iso + "Z").getTime()) / 1000);
+      if (s < 60) return "just now";
+      if (s < 3600) return Math.floor(s / 60) + "m ago";
+      if (s < 86400) return Math.floor(s / 3600) + "h ago";
+      return Math.floor(s / 86400) + "d ago";
+    }
+
+    document.addEventListener("htmx:afterSwap", () => {
+      document.querySelectorAll("time.notif-time").forEach((el) => {
+        el.textContent = timeAgo(el.getAttribute("datetime"));
+      });
+    });
+
+    // ── push subscription ──
+    function updateUI() {
+      const btn = document.getElementById("subscribe-btn");
+      const nameInput = document.getElementById("device-name");
+      btn.disabled = false;
+      if (subscribed) {
+        btn.textContent = "Disable Notifications";
+        btn.className = "subscribed";
+        nameInput.disabled = true;
+        nameInput.style.opacity = "0.5";
+        setStatus("Subscribed", "ok");
+        setHint("");
+      } else {
+        btn.textContent = "Enable Notifications";
+        btn.className = "";
+        nameInput.disabled = false;
+        nameInput.style.opacity = "1";
+        setStatus("Not subscribed", "warn");
+        setHint("");
+      }
+    }
+
+    async function init() {
+      document.getElementById("device-name").value = detectDevice();
+
+      if (!("serviceWorker" in navigator)) {
+        setStatus("Service Workers not supported", "error");
+        return;
+      }
+      if (!("PushManager" in window)) {
+        setStatus("Push API not supported", "error");
+        setHint("On iOS: Add to Home Screen first, then open from there.");
+        return;
+      }
+      try {
+        swReg = await navigator.serviceWorker.register("/sw.js");
+        const sub = await swReg.pushManager.getSubscription();
+        subscribed = sub !== null;
+        updateUI();
+      } catch (err) {
+        setStatus("SW registration failed", "error");
+      }
+    }
+
+    async function toggleSubscription() {
+      if (subscribed) await doUnsubscribe();
+      else await doSubscribe();
+    }
+
+    async function doSubscribe() {
+      try {
+        const res = await fetch("/api/vapid-public-key");
+        const { publicKey } = await res.json();
+        const deviceName = document.getElementById("device-name").value.trim() || detectDevice();
+
+        const sub = await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+
+        await fetch("/api/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscription: sub.toJSON(),
+            device_name: deviceName,
+          }),
+        });
+
+        subscribed = true;
+        updateUI();
+      } catch (err) {
+        setStatus("Subscribe failed: " + err.message, "error");
+      }
+    }
+
+    async function doUnsubscribe() {
+      try {
+        const sub = await swReg.pushManager.getSubscription();
+        if (sub) {
+          await fetch("/api/unsubscribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+          await sub.unsubscribe();
+        }
+        subscribed = false;
+        updateUI();
+      } catch (err) {
+        setStatus("Unsubscribe failed", "error");
+      }
+    }
+
+    // ── live refresh via BroadcastChannel ──
+    const ch = new BroadcastChannel("cloudplush-push");
+    ch.addEventListener("message", () => {
+      htmx.trigger("#notification-list", "refresh");
+    });
+
+    init();
+  </script>
+</body>
+</html>

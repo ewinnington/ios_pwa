@@ -1,0 +1,8 @@
+vapid_keys.json
+notifications.db
+data/
+__pycache__/
+*.pyc
+.git
+*.md
+setup.py

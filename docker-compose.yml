@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8899:8080"
+    volumes:
+      - ./vapid_keys.json:/app/vapid_keys.json:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - tunnel
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - tunnel
+
+networks:
+  tunnel:

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudPlush Admin</title>
+  <script src="/static/htmx.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f23;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.4rem; color: #a29bfe; margin-bottom: 24px; }
+
+    form { display: flex; flex-direction: column; gap: 12px; }
+    input, textarea {
+      background: #1a1a2e;
+      border: 1px solid #2d2d44;
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, textarea:focus { border-color: #6C5CE7; }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .field-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: #636e72;
+      margin-bottom: -4px;
+    }
+
+    .device-check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #1a1a2e;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .device-check:hover { background: #22223a; }
+    .device-check input[type="checkbox"] {
+      accent-color: #6C5CE7;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .device-name { font-size: 0.9rem; flex: 1; }
+    .empty-sm {
+      color: #636e72;
+      font-size: 0.82rem;
+      padding: 8px 0;
+    }
+
+    button[type="submit"] {
+      background: #6C5CE7;
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button[type="submit"]:hover { background: #5a4bd1; }
+    button[type="submit"]:active { transform: scale(0.98); }
+
+    #result { margin-top: 16px; }
+    .success {
+      background: rgba(0, 206, 201, 0.15);
+      border: 1px solid #00cec9;
+      color: #00cec9;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+    .fail {
+      background: rgba(255, 118, 117, 0.15);
+      border: 1px solid #ff7675;
+      color: #ff7675;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #636e72;
+      margin: 32px 0 12px;
+    }
+    .notif-item {
+      background: #1a1a2e;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+    }
+    .notif-title { font-weight: 600; font-size: 0.9rem; }
+    .notif-body { font-size: 0.82rem; color: #b2bec3; margin-top: 3px; }
+    .notif-time { display: block; font-size: 0.7rem; color: #636e72; margin-top: 4px; }
+    .empty { color: #636e72; text-align: center; padding: 24px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>CloudPlush Admin</h1>
+
+  <form hx-post="/api/send" hx-target="#result" hx-swap="innerHTML"
+        hx-on::after-request="if(event.detail.successful) this.reset()">
+    <input type="text" name="title" placeholder="Notification title" required autocomplete="off">
+    <textarea name="body" placeholder="Message body..." required></textarea>
+
+    <div class="field-label">Devices</div>
+    <div id="devices"
+         hx-get="/api/devices"
+         hx-trigger="load, every 15s, notificationSent from:body"
+         hx-swap="innerHTML">
+      Loading...
+    </div>
+
+    <button type="submit">Send Notification</button>
+  </form>
+  <div id="result"></div>
+
+  <div class="section-title">Recent</div>
+  <div id="log"
+       hx-get="/api/notifications"
+       hx-trigger="load, every 10s, notificationSent from:body"
+       hx-swap="innerHTML">
+    Loading...
+  </div>
+
+  <script>
+    function timeAgo(iso) {
+      const s = Math.floor((Date.now() - new Date(iso + "Z").getTime()) / 1000);
+      if (s < 60) return "just now";
+      if (s < 3600) return Math.floor(s / 60) + "m ago";
+      if (s < 86400) return Math.floor(s / 3600) + "h ago";
+      return Math.floor(s / 86400) + "d ago";
+    }
+    document.addEventListener("htmx:afterSwap", () => {
+      document.querySelectorAll("time.notif-time").forEach((el) => {
+        el.textContent = timeAgo(el.getAttribute("datetime"));
+      });
+    });
+  </script>
+</body>
+</html>
